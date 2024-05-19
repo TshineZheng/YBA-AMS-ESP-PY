@@ -1,7 +1,7 @@
 复刻 [YBA-AMS-ESP](https://github.com/YBA0312/YBA-AMS-ESP/tree/main) 固件，修复第4通道无法使用BUG，优化断连问题。
 
 ## 固件
-下载地址：待打包
+[下载](https://github.com/TshineZheng/YBA-AMS-ESP-PY/releases)
 
 ## 使用
 唯一的区别是配网, 手机安装 EspTouch APP，或者小程序也可以，请自行研究查找
