@@ -1,4 +1,4 @@
-复刻 [YBA-AMS-ESP](https://github.com/YBA0312/YBA-AMS-ESP/tree/main) 固件ESP，修复第4通道无法使用BUG，优化断连问题。
+复刻 [YBA-AMS-ESP](https://github.com/YBA0312/YBA-AMS-ESP/tree/main) 固件，修复第4通道无法使用BUG，优化断连问题。
 
 ## 固件
 下载地址：待打包
