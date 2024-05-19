@@ -4,7 +4,9 @@
 [下载](https://github.com/TshineZheng/YBA-AMS-ESP-PY/releases)
 
 ## 使用
-唯一的区别是配网, 手机安装 EspTouch APP，或者小程序也可以，请自行研究查找
+唯一的区别是配网, 微信小程序搜索 **一键配网**
+
+操作步骤：切换协议 > SmartConfig 配网 > 输入 Wifi 密码
 
 ## 关于第四通道
 1. 需要将原来的 gpio8 更换为 gipo11，如果你的PCB是原版的话需要飞线操作。
