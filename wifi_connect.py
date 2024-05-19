@@ -117,6 +117,29 @@ def wifi_init():
         while not smartconfig.done():
             wifi_smartconfig()
 
+_running = False
+
+def wifi_check():
+    """
+    检测WiFi连接状态并重新连接(如果需要)
+    """
+    global _running
+    _running = True
+    print("Wifi 守护线程启动\n")
+    wlan = network.WLAN(network.STA_IF)
+    WIFI_SSID, WIFI_PASSWORD = read_config()
+    while _running:
+        if not wlan.isconnected():
+            print("WiFi disconnected, reconnecting...")
+            wlan.disconnect()
+            connect_wifi(wlan, WIFI_SSID, WIFI_PASSWORD)
+
+        time.sleep(1)  # 检测WiFi连接状态的间隔
+    print("Wifi 守护线程结束\n")
+
+def stop_wifi_check():
+    global _running
+    _running = False
 
 if __name__ == '__main__':
     wifi_init()

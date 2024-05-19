@@ -55,6 +55,7 @@ class SocketServer(object):
         self.recive_size = recive_size
 
     def sendloop(self):
+        print('发送线程启动')
         while self.is_run:
             while self._send_queue:
                 client, msg = self._send_queue.popleft()
@@ -63,6 +64,7 @@ class SocketServer(object):
                 except OSError:
                     print('send msg failed!')
             time.sleep(0.1)
+        print('发送线程结束')
 
     def start(self):
         """启动服务

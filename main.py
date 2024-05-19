@@ -1,5 +1,6 @@
 import _thread
 import gc
+import logging
 import time
 
 import esp  # type: ignore
@@ -8,24 +9,6 @@ import network
 import asm_pcb as ams
 import wifi_connect
 from socket_server import SocketServer
-
-
-def wifi_check():
-    """
-    检测WiFi连接状态并重新连接(如果需要)
-    """
-    global running
-    print("Wifi 守护线程启动\n")
-    wlan = network.WLAN(network.STA_IF)
-    WIFI_SSID, WIFI_PASSWORD = wifi_connect.read_config()
-    while running:
-        if not wlan.isconnected():
-            print("WiFi disconnected, reconnecting...")
-            wlan.disconnect()
-            wifi_connect.connect_wifi(wlan, WIFI_SSID, WIFI_PASSWORD)
-
-        time.sleep(1)  # 检测WiFi连接状态的间隔
-    print("Wifi 守护线程结束\n")
 
 
 def on_socket_recv(client, data):
@@ -62,8 +45,6 @@ def on_client_disconnect(client, address):
     # TODO:此处最好判断下有几个客户端，如果还有客户端就不要关闭，虽然目前按逻辑只有一个
     ams.led_connect_io.value(0)
 
-running = True
-
 esp.osdebug(0)  # 禁用调试
 # esp.sleep_type(esp.SLEEP_NONE)  # 禁用休眠
 
@@ -79,7 +60,7 @@ print("可用内存：", gc.mem_free())  # 查看当前可用的内存
 
 wifi_connect.wifi_init()  # 先连接网络
 
-_thread.start_new_thread(wifi_check, ())  # 启动Wifi检测线程
+_thread.start_new_thread(wifi_connect.wifi_check, ())  # 启动Wifi检测线程
 
 socket_server = SocketServer('0.0.0.0', 3333, on_socket_recv, 
                              need_send=True, 
@@ -98,7 +79,7 @@ try:
         ams.logic()
         time.sleep(0.1)
 except:
-    running = False
     ams.gpio_init()
+    wifi_connect.stop_wifi_check()
     socket_server.stop()
     print('程序结束\n')
