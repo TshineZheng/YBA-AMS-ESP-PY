@@ -1,6 +1,5 @@
 import _thread
 import gc
-import logging
 import time
 
 import esp  # type: ignore
