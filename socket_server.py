@@ -4,6 +4,8 @@ import socket
 import time
 from collections import deque
 
+from simple_log import log
+
 EOT = '\x04'
 
 # 检测端口是否使用
@@ -147,13 +149,17 @@ class SocketServer(object):
                 try:
                     data = conn.recv(self.recive_size)
                     if len(data) == 0:
+                        log('client close by data len == 0')
                         break
                     # data = str(data, 'utf-8')
                     # print(address, 'read data str = ', data)
                     if self.parse_def(conn, data) != True:
+                        log('client close by parse data error')
                         break
                 except Exception as e:
                     print(e)
+                    # 记录异常
+                    log(f'client close by error: {e}')
                     break
             time.sleep(0.1)
 
@@ -165,6 +171,9 @@ class SocketServer(object):
 
     def send(self, client: socket.socket, msg: str):
         self._send_queue.append((client, msg + EOT))
+
+    def send_raw(self, client: socket.socket, msg: bytes):
+        self._send_queue.append((client, msg))
 
     def send_all(self, msg: str):
         for client, address in self.client_list:

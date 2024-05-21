@@ -3,25 +3,23 @@ import gc
 import time
 
 import esp  # type: ignore
-import network
 
 import asm_pcb as ams
 import wifi_connect
+from simple_log import log, read_log, send_log_by_socket
 from socket_server import SocketServer
+from time_util import sync_ntp
 
 
 def on_socket_recv(client, data):
-    if len(data) <= 0:
-        print("socket 断开")
-        return False
-    
+
     # 简单检验客户端发送的数据是否正确
-    if len(data) == 8 and data[0:6] == b'\x2f\x2f\xff\xfe\x01\x02': # YBA 原来的指令
+    if len(data) == 8 and data[0:6] == b'\x2f\x2f\xff\xfe\x01\x02':  # YBA 原来的指令
         ch = int(data[-2])
         fx = int(data[-1])
         ams.motor_control(ch, fx)
 
-    elif len(data) >= 5 and data[0:4] == b'\x2f\x2f\xff\xfe': # 获取内存数据
+    elif len(data) >= 5 and data[0:4] == b'\x2f\x2f\xff\xfe':  # 获取内存数据
         cmd = data[4:5]
 
         if cmd == b'\xff':
@@ -33,16 +31,27 @@ def on_socket_recv(client, data):
             gc_free = gc.mem_free()
             gc_alloc = gc.mem_alloc()
 
-            socket_server.send(client, f'esp32c3 memory alloc:{alloc}, free:{free}, gc alloc:{gc_alloc}, gc free:{gc_free}')
+            socket_server.send(
+                client, f'esp32c3 memory alloc:{alloc}, free:{free}, gc alloc:{gc_alloc}, gc free:{gc_free}')
+        elif cmd == b'\xfe':
+            socket_server.send(client, read_log())
+        elif cmd == b'\xfd':
+            gc_free = gc.mem_free()
+            gc_alloc = gc.mem_alloc()
+            socket_server.send(
+                client, f'esp32c3 memory alloc:{alloc}, free:{free}, gc alloc:{gc_alloc}, gc free:{gc_free}')
 
     return True
+
 
 def on_client_connect(client, address):
     ams.led_connect_io.value(1)
 
+
 def on_client_disconnect(client, address):
     # TODO:此处最好判断下有几个客户端，如果还有客户端就不要关闭，虽然目前按逻辑只有一个
     ams.led_connect_io.value(0)
+
 
 esp.osdebug(0)  # 禁用调试
 # esp.sleep_type(esp.SLEEP_NONE)  # 禁用休眠
@@ -59,12 +68,17 @@ print("可用内存：", gc.mem_free())  # 查看当前可用的内存
 
 wifi_connect.wifi_init()  # 先连接网络
 
-_thread.start_new_thread(wifi_connect.wifi_check, ())  # 启动Wifi检测线程
+sync_ntp()  # 同步时间
 
-socket_server = SocketServer('0.0.0.0', 3333, on_socket_recv, 
-                             need_send=True, 
-                             on_client_connect=on_client_connect, 
-                             on_client_disconnect=on_client_disconnect, 
+# 记录启动时间
+log(f'system boot')
+
+thread_id = _thread.start_new_thread(wifi_connect.wifi_check, ())  # 启动Wifi检测线程
+
+socket_server = SocketServer('0.0.0.0', 3333, on_socket_recv,
+                             need_send=True,
+                             on_client_connect=on_client_connect,
+                             on_client_disconnect=on_client_disconnect,
                              recive_size=8)
 socket_server.start()
 

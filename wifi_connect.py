@@ -4,6 +4,8 @@ import network
 import smartconfig  # type: ignore
 import utime
 
+from simple_log import log
+
 TYPES = {
     smartconfig.TYPE_ESPTOUCH: 'ESPTOUCH',
     smartconfig.TYPE_AIRKISS: 'AIRKISS',
@@ -130,7 +132,8 @@ def wifi_check():
     WIFI_SSID, WIFI_PASSWORD = read_config()
     while _running:
         if not wlan.isconnected():
-            print("WiFi disconnected, reconnecting...")
+            # 记录 wifi 断开
+            log('WiFi disconnected, reconnecting...')
             wlan.disconnect()
             connect_wifi(wlan, WIFI_SSID, WIFI_PASSWORD)
 
