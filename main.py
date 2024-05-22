@@ -37,7 +37,7 @@ def on_socket_recv(client, data):
             gc_free = gc.mem_free()
             gc_alloc = gc.mem_alloc()
             socket_server.send(
-                client, f'esp32c3 memory alloc:{alloc}, free:{free}')
+                client, f'esp32c3 memory alloc:{gc_alloc}, free:{gc_free}')
 
     return True
 
@@ -69,6 +69,7 @@ sync_ntp()  # 同步时间
 log_boot()  # 记录启动
 
 import webrepl
+
 webrepl.start(password='123456')
 
 thread_id = _thread.start_new_thread(wifi_connect.wifi_check, ())  # 启动Wifi检测线程
