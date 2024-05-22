@@ -4,7 +4,7 @@ import network
 import smartconfig  # type: ignore
 import utime
 
-from simple_log import log
+from mpy_common.simple_log import log
 
 TYPES = {
     smartconfig.TYPE_ESPTOUCH: 'ESPTOUCH',

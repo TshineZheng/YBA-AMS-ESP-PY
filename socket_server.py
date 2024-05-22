@@ -4,7 +4,7 @@ import socket
 import time
 from collections import deque
 
-from simple_log import log
+from mpy_common.simple_log import log
 
 EOT = '\x04'
 

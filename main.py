@@ -5,10 +5,10 @@ import time
 import esp  # type: ignore
 
 import asm_pcb as ams
-import wifi_connect
-from simple_log import log, read_log, send_log_by_socket
+from mpy_common import wifi_connect
+from mpy_common.simple_log import log_boot
+from mpy_common.time_util import sync_ntp
 from socket_server import SocketServer
-from time_util import sync_ntp
 
 
 def on_socket_recv(client, data):
@@ -34,12 +34,10 @@ def on_socket_recv(client, data):
             socket_server.send(
                 client, f'esp32c3 memory alloc:{alloc}, free:{free}, gc alloc:{gc_alloc}, gc free:{gc_free}')
         elif cmd == b'\xfe':
-            socket_server.send(client, read_log())
-        elif cmd == b'\xfd':
             gc_free = gc.mem_free()
             gc_alloc = gc.mem_alloc()
             socket_server.send(
-                client, f'esp32c3 memory alloc:{alloc}, free:{free}, gc alloc:{gc_alloc}, gc free:{gc_free}')
+                client, f'esp32c3 memory alloc:{alloc}, free:{free}')
 
     return True
 
@@ -67,11 +65,11 @@ print("可用内存：", gc.mem_free())  # 查看当前可用的内存
 # ams.self_check()
 
 wifi_connect.wifi_init()  # 先连接网络
-
 sync_ntp()  # 同步时间
+log_boot()  # 记录启动
 
-# 记录启动时间
-log(f'system boot')
+import webrepl
+webrepl.start(password='123456')
 
 thread_id = _thread.start_new_thread(wifi_connect.wifi_check, ())  # 启动Wifi检测线程
 
@@ -83,7 +81,6 @@ socket_server = SocketServer('0.0.0.0', 3333, on_socket_recv,
 socket_server.start()
 
 gc.collect()  # 执行垃圾回收
-# 再次查看内存使用情况
 print(f"执行垃圾回收后的已分配内存：{gc.mem_alloc()}")
 print(f"执行垃圾回收后的可用内存：{gc.mem_free()}")
 
