@@ -103,10 +103,12 @@ def connect_wifi(wlan: network.WLAN, WIFI_SSID: str, WIFI_PASSWORD: str):
     print("WiFi Connected!")
     print("IP Address:", wlan.ifconfig()[0])
 
+_inited = False
 def wifi_init():
     """
     Wifi初始化，开机启动时先执行此函数
     """
+    global _inited
     # 设置WiFi为station模式并激活
     wlan = network.WLAN(network.STA_IF)
     wlan.active(True)
@@ -119,23 +121,30 @@ def wifi_init():
         while not smartconfig.done():
             wifi_smartconfig()
 
-_running = False
+    _inited = True
 
-def wifi_check():
+_running = False
+def wifi_check(on_wifi_state = None):
     """
     检测WiFi连接状态并重新连接(如果需要)
+
+    Args:
+                    on_wifi_state (func(connected: bool)): wifi 状态回调函数，每秒一次
     """
-    global _running
+    global _running, _inited
     _running = True
     print("Wifi 守护线程启动\n")
     wlan = network.WLAN(network.STA_IF)
-    WIFI_SSID, WIFI_PASSWORD = read_config()
     while _running:
-        if not wlan.isconnected():
-            # 记录 wifi 断开
-            log('WiFi disconnected, reconnecting...')
-            wlan.disconnect()
-            connect_wifi(wlan, WIFI_SSID, WIFI_PASSWORD)
+        state = wlan.isconnected()
+        if on_wifi_state: on_wifi_state(state)
+        
+        if not state:
+            if _inited: # 初始化后再进行重连
+                log('WiFi disconnected, reconnecting...')   # 记录 wifi 断开
+                wlan.disconnect()
+                WIFI_SSID, WIFI_PASSWORD = read_config()
+                connect_wifi(wlan, WIFI_SSID, WIFI_PASSWORD)
 
         time.sleep(1)  # 检测WiFi连接状态的间隔
     print("Wifi 守护线程结束\n")
