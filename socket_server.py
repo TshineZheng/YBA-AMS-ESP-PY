@@ -68,17 +68,18 @@ class SocketServer(object):
             time.sleep(0.1)
         print('发送线程结束')
 
-    def start(self):
+    def start_async(self):
         """启动服务
         """
+        _thread.start_new_thread(self.start, ())
+
+    def start(self):
         if not self.is_run:
-            _thread.start_new_thread(self.do_create_server, (socket.socket(),))            
             if self.need_send:
                 _thread.start_new_thread(self.sendloop, ())
-
-            print(self, 'start server win!')
+            self.do_create_server(socket.socket())
         else:
-            print(self, 'start server lose!')
+            print(self, 'server already started!')
 
     def stop(self):
         """停止服务
@@ -182,6 +183,6 @@ class SocketServer(object):
 
 if __name__ == '__main__':
     server = SocketServer('0.0.0.0', 8123, lambda client, msg: print('ok'))
-    server.start()
+    server.start_async()
     time.sleep(1000)
     server.stop()

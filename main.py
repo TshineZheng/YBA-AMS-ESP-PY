@@ -7,6 +7,7 @@ import webrepl  # type: ignore
 
 import asm_pcb as ams
 from mpy_common import wifi_connect
+from mpy_common.file_util import file_exists
 from mpy_common.simple_log import log_boot
 from mpy_common.time_util import sync_ntp
 from socket_server import SocketServer
@@ -69,6 +70,18 @@ def on_wifi_state(connected):
 esp.osdebug(0)  # 禁用调试
 # esp.sleep_type(esp.SLEEP_NONE)  # 禁用休眠
 
+if file_exists('config.json'):
+    with open('config.json', 'r') as f:
+        try:
+            json = eval(f.read())
+            if 'servo_deg_clamp' in json and 'servo_deg_unclamp' in json:
+                servo_deg_clamp = json['servo_deg_clamp']
+                servo_deg_unclamp = json['servo_deg_unclamp']
+                print("servo init",servo_deg_clamp,servo_deg_unclamp)
+                ams.set_servo_deg(servo_deg_clamp, servo_deg_unclamp)
+        except:
+            pass
+
 ams.gpio_init()
 ams.led_power_io.value(1)
 ams.led_connect_io.value(0)
@@ -86,22 +99,20 @@ sync_ntp(sync_interval=0.1)  # 同步时间
 log_boot()  # 记录启动
 
 webrepl.start(password='123456') # 启动 webrepl
+#ams.self_check()
+
+gc.collect()  # 执行垃圾回收
+print(f"执行垃圾回收后的已分配内存：{gc.mem_alloc()}")
+print(f"执行垃圾回收后的可用内存：{gc.mem_free()}")
 
 socket_server = SocketServer('0.0.0.0', 3333, on_socket_recv,
                              need_send=True,
                              on_client_connect=on_client_connect,
                              on_client_disconnect=on_client_disconnect,
                              recive_size=512)
-socket_server.start()
-
-gc.collect()  # 执行垃圾回收
-print(f"执行垃圾回收后的已分配内存：{gc.mem_alloc()}")
-print(f"执行垃圾回收后的可用内存：{gc.mem_free()}")
 
 try:
-    while True:
-        ams.logic()
-        time.sleep(0.1)
+    socket_server.start()
 except:
     ams.gpio_init()
     wifi_connect.stop_wifi_check()
