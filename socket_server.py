@@ -137,8 +137,10 @@ class SocketServer(object):
         self.client_list.append((conn, address))
         print('client list size = ', len(self.client_list))
         print('start read ', address)
+
         if self.on_client_connect:
             self.on_client_connect(conn, address)
+
         while self.is_run and self.client_list.index((conn, address)) >= 0:
             try:
                 r, _, _ = select.select([conn], [], [])
@@ -149,25 +151,30 @@ class SocketServer(object):
                 try:
                     data = conn.recv(self.recive_size)
                     if len(data) == 0:
-                        log('client close by data len == 0')
+                        log(f'client {address} close by data len == 0')
                         break
                     # data = str(data, 'utf-8')
                     # print(address, 'read data str = ', data)
                     if self.parse_def(conn, data) != True:
-                        log('client close by parse data error')
+                        log(f'client {address} close by parse data error')
                         break
                 except Exception as e:
                     print(e)
                     # 记录异常
-                    log(f'client close by error: {e}')
+                    log(f'client {address} close by error: {e}')
                     break
             time.sleep(0.1)
 
-        self.client_list.remove((conn, address))
-        print('client close from:', address)
-        conn.close()
         if self.on_client_disconnect:
             self.on_client_disconnect(conn, address)
+        
+        self.client_list.remove((conn, address))
+        print('client close from:', address)
+        try:
+            conn.close()
+        except Exception as e:
+            log(f'client {address} socket close error: ', e)
+
 
     def send(self, client: socket.socket, msg: str):
         self._send_queue.append((client, msg + EOT))
