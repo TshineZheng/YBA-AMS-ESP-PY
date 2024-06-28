@@ -35,18 +35,20 @@ ch_io = [
          Pin(M4_DOWN, Pin.OUT, Pin.PULL_DOWN)],
 ]
 
-sw_io = [
-    Pin(SW1, Pin.IN, Pin.PULL_DOWN), Pin(SW2, Pin.IN, Pin.PULL_DOWN), 
-    Pin(SW3, Pin.IN, Pin.PULL_DOWN), Pin(SW4, Pin.IN, Pin.PULL_DOWN)
-]
-
 led_power_io = Pin(LED1, Pin.OUT, Pin.PULL_DOWN)
 led_connect_io = Pin(LED2, Pin.OUT, Pin.PULL_DOWN)
 
-channel_status = [ACTION.STOP, ACTION.STOP, ACTION.STOP, ACTION.STOP]
-switch_status = [0, 0, 0, 0]
+cur_ch: int = 0
+cur_ch_action: int = ACTION.STOP
 
-def motor_control(id: int, action: int, status_save=True):
+latest_state = None
+
+buffer_1 = Pin(SW1, Pin.IN, Pin.PULL_DOWN)
+buffer_2 = Pin(SW2, Pin.IN, Pin.PULL_DOWN)
+broken_detect = Pin(SW3, Pin.IN, Pin.PULL_DOWN)
+
+
+def _motor_control(id: int, action: int):
     if action == ACTION.PULL:
         ch_io[id][0].value(1)
         ch_io[id][1].value(0)
@@ -57,8 +59,26 @@ def motor_control(id: int, action: int, status_save=True):
         ch_io[id][0].value(0)
         ch_io[id][1].value(0)
 
-    if status_save:
-        channel_status[id] = action
+
+def _motor_set(id: int, action: int):
+    for i in range(4):
+        if i != id:
+            _motor_control(i, ACTION.STOP)
+        else:
+            _motor_control(i, action)
+
+
+def motor_triiger(id: int, action: int):
+    global cur_ch
+    global cur_ch_action
+    
+    if cur_ch == id and cur_ch_action == action:
+        return
+    
+    cur_ch = id
+    cur_ch_action = action
+    _motor_control(id, action)
+
 
 def gpio_init():
 
@@ -69,41 +89,58 @@ def gpio_init():
     led_power_io.value(1)
     led_connect_io.value(0)
 
+
 def self_check():
     for i in range(4):
         print(f"channel {i} testing")
-        motor_control(i, ACTION.PULL)
+        _motor_control(i, ACTION.PULL)
         time.sleep(0.5)
-        motor_control(i, ACTION.PUSH)
+        _motor_control(i, ACTION.PUSH)
         time.sleep(0.5)
-        motor_control(i, ACTION.STOP)
+        _motor_control(i, ACTION.STOP)
         time.sleep(0.5)
 
-def logic():
-    for i in range(4):
-        if channel_status[i] == ACTION.PULL:
-            # 回抽时，如果上微动触发则停止回抽
-            if sw_io[i].value() == 1:
-                motor_control(i, ACTION.STOP, False)
-            else:
-                motor_control(i, ACTION.PULL, False)
+def get_broken_state():
+    return broken_detect.value()
+
+def logic(onbrokenSwitch):
+    global cur_ch
+    global cur_ch_action
+    global latest_state
+
+    currentState = broken_detect.value()
+    if currentState != latest_state:
+            latest_state = currentState
+            if onbrokenSwitch:
+                onbrokenSwitch(latest_state)
+
+    if cur_ch_action == ACTION.PUSH:
+        if buffer_2.value() == 1:
+            _motor_set(cur_ch, ACTION.STOP)
         else:
-            if sw_io[i].value() == 1:
-                switch_status[i] = 5
-                motor_control(i, ACTION.PUSH, False)
-            elif switch_status[i] > 0:
-                if switch_status[i] == 1:
-                    motor_control(i, channel_status[i])
-                switch_status[i] -= 1
+            _motor_set(cur_ch, ACTION.PUSH)
+    elif cur_ch_action == ACTION.PULL:
+        if buffer_1.value() == 1:
+            _motor_set(cur_ch, ACTION.STOP)
+        else:
+            _motor_set(cur_ch, ACTION.PULL)
+    else:
+        if buffer_1.value() == 1:
+            _motor_set(cur_ch, ACTION.PUSH)
+        elif buffer_2.value() == 1:
+            _motor_set(cur_ch, ACTION.PULL)
+        else:
+            _motor_set(cur_ch, ACTION.STOP)
+
 
 if __name__ == '__main__':
     gpio_init()
-    self_check()
+    # self_check()
+    motor_triiger(3, ACTION.PUSH)
 
     try:
         while True:
             logic()
-            time.sleep(0.1)
+            time.sleep(0.05)
     except KeyboardInterrupt:
         gpio_init()
- 
