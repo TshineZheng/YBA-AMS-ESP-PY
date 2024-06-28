@@ -7,7 +7,9 @@
 ## 使用
 唯一的区别是配网, 微信小程序搜索 **一键配网**
 
-操作步骤：切换协议 > SmartConfig 配网 > 输入 Wifi 密码
+操作步骤：切换协议 > SmartConfig 配网 > 输入 Wifi 密码。
+
+或者下载 `SmartConfig` 相关 App 工具，比如：[EspTouch](https://play.google.com/store/apps/details?id=com.fyent.esptouch.android) ，[EspTouch iOS](https://apps.apple.com/us/app/espressif-esptouch/id1071176700)
 
 ## 关于第四通道
 1. 需要将原来的 gpio8 更换为 gipo11，如果你的PCB是原版的话需要飞线操作。
