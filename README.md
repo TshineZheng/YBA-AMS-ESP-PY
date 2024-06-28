@@ -1,4 +1,5 @@
 复刻 [YBA-AMS-ESP](https://github.com/YBA0312/YBA-AMS-ESP/tree/main) 固件，修复第4通道无法使用BUG，优化断连问题。
+> 需要单缓冲请参看 [single buffer](https://github.com/TshineZheng/YBA-AMS-ESP-PY/tree/single_buffer) 分支
 
 ## 固件
 [下载](https://github.com/TshineZheng/YBA-AMS-ESP-PY/releases)
