@@ -1,130 +1,130 @@
-import _thread
-import gc
-import json
+import binascii
+import struct
 import time
 
-import esp  # type: ignore
-import webrepl  # type: ignore
+from machine import UART, Pin
 
-import asm_pcb as ams
-from mpy_common import wifi_connect
-from mpy_common.simple_log import log_boot
-from mpy_common.time_util import sync_ntp
-from socket_server import SocketServer
+# 串口编号设置
+M1_UP = 0
+M1_DOWN = 1
+M2_UP = 18
+M2_DOWN = 19
+M3_UP = 2
+M3_DOWN = 3
+M4_UP = 10
+M4_DOWN = 6
+SW1 = 7
+SW2 = 5
+SW3 = 4
+SW4 = 11
+LED1 = 12
+LED2 = 13
 
-msg_type_gc = 0
-msg_type_sys = 1
-msg_type_broken_detect = 2
-
-
-def on_socket_recv(client, data):
-    data_len = len(data)
-
-    # 简单检验客户端发送的数据是否正确
-    if data_len == 8 and data[0:6] == b'\x2f\x2f\xff\xfe\x01\x02':  # YBA 原来的指令
-        ch = int(data[-2])
-        fx = int(data[-1])
-        ams.motor_triiger(ch, fx)
-
-    elif data_len >= 5 and data[0:4] == b'\x2f\x2f\xff\xfe':
-        cmd = data[4:5]
-        if b'\x02' == cmd:  # 同步所有通道
-            channel_total = int.from_bytes(data[5:6], 'big')
-            for i in range(channel_total):
-                fx = int.from_bytes(data[6 + i:7 + i], 'big')
-                if fx != 0:
-                    ams.motor_triiger(i, fx)
-        elif b'\xff' == cmd:    # gc
-            free = gc.mem_free()
-            alloc = gc.mem_alloc()
-            gc.collect()
-            gc_free = gc.mem_free()
-            gc_alloc = gc.mem_alloc()
-            socket_server.send(client, generate_msg(
-                msg_type_gc, f'esp32c3 memory alloc:{alloc}, free:{free}, gc alloc:{gc_alloc}, gc free:{gc_free}'))
-        elif b'\xfe' == cmd:    # 获取系统状态信息
-            gc_free = gc.mem_free()
-            gc_alloc = gc.mem_alloc()
-            socket_server.send(client, generate_msg(
-                msg_type_sys, f'esp32c3 memory alloc:{gc_alloc}, free:{gc_free}'))
-        elif b'\xfd' == cmd:    # 获取断料状态
-            sendBrokenState(ams.broken_detect.value())
-
-    return True
+UART_IO = SW4
 
 
-def on_client_connect(client, address):
-    ams.led_connect_io.value(1)
+class ACTION:
+    STOP = 0
+    PUSH = 1
+    PULL = 2
 
 
-def on_client_disconnect(client, address):
-    # TODO:此处最好判断下有几个客户端，如果还有客户端就不要关闭，虽然目前按逻辑只有一个
-    ams.led_connect_io.value(0)
+led_power_io = Pin(LED1, Pin.OUT, Pin.PULL_DOWN)
+led_connect_io = Pin(LED2, Pin.OUT, Pin.PULL_DOWN)
+uart = UART(1, baudrate=115200, rx=UART_IO)
+
+ch_io = [
+        [Pin(M1_UP, Pin.OUT, Pin.PULL_DOWN),
+         Pin(M1_DOWN, Pin.OUT, Pin.PULL_DOWN)],
+        [Pin(M2_UP, Pin.OUT, Pin.PULL_DOWN),
+         Pin(M2_DOWN, Pin.OUT, Pin.PULL_DOWN)],
+        [Pin(M3_UP, Pin.OUT, Pin.PULL_DOWN),
+         Pin(M3_DOWN, Pin.OUT, Pin.PULL_DOWN)],
+        [Pin(M4_UP, Pin.OUT, Pin.PULL_DOWN),
+         Pin(M4_DOWN, Pin.OUT, Pin.PULL_DOWN)],
+]
 
 
-power_led_shake = True
+def _motor_control(id: int, action: int):
+    if action == ACTION.PULL:
+        ch_io[id][0].value(1)
+        ch_io[id][1].value(0)
+    elif action == ACTION.PUSH:
+        ch_io[id][0].value(0)
+        ch_io[id][1].value(1)
+    elif action == ACTION.STOP:
+        ch_io[id][0].value(0)
+        ch_io[id][1].value(0)
 
 
-def on_wifi_state(connected):
-    global power_led_shake
-    if connected:
-        ams.led_power_io.value(1)
-    else:
-        ams.led_power_io.value(0 if power_led_shake else 1)
-        power_led_shake = not power_led_shake
+def _motor_set(id: int, action: int):
+    for i in range(4):
+        if i != id:
+            _motor_control(i, ACTION.STOP)
+        else:
+            _motor_control(i, action)
 
 
-def sendBrokenState(state: int):
-    socket_server.send_all(generate_msg(msg_type_broken_detect, str(state)))
+def gpio_init():
+
+    for i in range(4):
+        ch_io[i][0].value(0)
+        ch_io[i][1].value(0)
+
+    led_power_io.value(1)
+    led_connect_io.value(0)
 
 
-def generate_msg(type: int, data: str):
-    return json.dumps({
-        'type': type,
-        'data': data
-    })
+def self_check():
+    for i in range(4):
+        print(f"channel {i} testing")
+        _motor_control(i, ACTION.PULL)
+        time.sleep(0.5)
+        _motor_control(i, ACTION.PUSH)
+        time.sleep(0.5)
+        _motor_control(i, ACTION.STOP)
+        time.sleep(0.5)
 
+# CRC 校验函数
+def calculate_crc(data):
+    return binascii.crc32(data) & 0xFFFFFFFF
 
-esp.osdebug(0)  # 禁用调试
-# esp.sleep_type(esp.SLEEP_NONE)  # 禁用休眠
-
-ams.gpio_init()
-ams.led_power_io.value(1)
-ams.led_connect_io.value(0)
-
-gc.enable()  # 启用垃圾回收
-print("已分配内存：", gc.mem_alloc())  # 查看当前已分配的内存
-print("可用内存：", gc.mem_free())  # 查看当前可用的内存
-
-# ams.self_check()
-
-thread_id = _thread.start_new_thread(
-    wifi_connect.wifi_check, (on_wifi_state, ))  # 启动Wifi检测线程
-
-wifi_connect.wifi_init()  # 先连接网络
-sync_ntp(sync_interval=0.1)  # 同步时间
-log_boot()  # 记录启动
-
-webrepl.start(password='123456')  # 启动 webrepl
-
-socket_server = SocketServer('0.0.0.0', 3333, on_socket_recv,
-                             need_send=True,
-                             on_client_connect=on_client_connect,
-                             on_client_disconnect=on_client_disconnect,
-                             recive_size=512)
-socket_server.start()
-
-gc.collect()  # 执行垃圾回收
-print(f"执行垃圾回收后的已分配内存：{gc.mem_alloc()}")
-print(f"执行垃圾回收后的可用内存：{gc.mem_free()}")
-
-try:
+def read_uart():
     while True:
-        ams.logic(sendBrokenState)
-        time.sleep(0.1)
-except:
-    ams.gpio_init()
-    wifi_connect.stop_wifi_check()
-    socket_server.stop()
-    webrepl.stop()
-    print('程序结束\n')
+        if uart.any():
+            length_byte = uart.read(1)  # 读取长度字节
+            if length_byte:
+                length = struct.unpack('B', length_byte)[0]
+                data = uart.read(length)  # 读取数据
+                if data:
+                    crc_bytes = uart.read(4)  # 读取 CRC 校验
+                    if crc_bytes and len(crc_bytes) == 4:
+                        received_crc = struct.unpack('I', crc_bytes)[0]
+                        calculated_crc = calculate_crc(data)
+                        if received_crc == calculated_crc:
+                            try:
+                                command_id, channel, action = struct.unpack('BBB', data)
+                                print(f"接收到 - 命令ID: {command_id}, 通道: {channel}, 动作: {action}")
+                                if command_id == 0:
+                                    _motor_control(channel, action)
+                                elif command_id == 1:
+                                    _motor_set(channel, action)
+                            except struct.error as e:
+                                print(f"解码错误: {e}")
+                        else:
+                            print("CRC 校验错误")
+                    else:
+                        print("读取 CRC 错误")
+                else:
+                    print("读取数据错误")
+
+
+if __name__ == '__main__':
+    gpio_init()
+    # self_check()
+
+    try:
+        while True:
+            read_uart()
+    except KeyboardInterrupt:
+        gpio_init()
