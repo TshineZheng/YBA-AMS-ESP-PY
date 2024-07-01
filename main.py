@@ -29,19 +29,11 @@ def on_socket_recv(client, data):
     elif data_len >= 5 and data[0:4] == b'\x2f\x2f\xff\xfe':
         cmd = data[4:5]
         if b'\x02' == cmd:  # 同步所有通道
-            if 6 + 4 == data_len:
-                fx0 = int.from_bytes(data[6:7], 'big')
-                fx1 = int.from_bytes(data[7:8], 'big')
-                fx2 = int.from_bytes(data[8:9], 'big')
-                fx3 = int.from_bytes(data[9:10], 'big')
-                if fx0 != 0:
-                    ams.motor_triiger(0, fx0)
-                if fx1 != 0:
-                    ams.motor_triiger(1, fx1)
-                if fx2 != 0:
-                    ams.motor_triiger(2, fx2)
-                if fx3 != 0:
-                    ams.motor_triiger(3, fx3)
+            channel_total = int.from_bytes(data[5:6], 'big')
+            for i in range(channel_total):
+                fx = int.from_bytes(data[6 + i:7 + i], 'big')
+                if fx != 0:
+                    ams.motor_triiger(i, fx)
         elif b'\xff' == cmd:    # gc
             free = gc.mem_free()
             alloc = gc.mem_alloc()

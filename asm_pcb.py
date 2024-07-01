@@ -1,6 +1,8 @@
+import binascii
+import struct
 import time
 
-from machine import Pin
+from machine import UART, Pin
 
 # 串口编号设置
 M1_UP = 0
@@ -18,66 +20,121 @@ SW4 = 11
 LED1 = 12
 LED2 = 13
 
+BUFFER_1 = SW1
+BUFFER_2 = SW2
+DETECT_IO = SW3
+UART_IO = SW4
+
 
 class ACTION:
     STOP = 0
     PUSH = 1
     PULL = 2
 
-ch_io = [
-        [Pin(M1_UP, Pin.OUT, Pin.PULL_DOWN), 
-         Pin(M1_DOWN, Pin.OUT, Pin.PULL_DOWN)],
-        [Pin(M2_UP, Pin.OUT, Pin.PULL_DOWN), 
-         Pin(M2_DOWN, Pin.OUT, Pin.PULL_DOWN)],
-        [Pin(M3_UP, Pin.OUT, Pin.PULL_DOWN), 
-         Pin(M3_DOWN, Pin.OUT, Pin.PULL_DOWN)],
-        [Pin(M4_UP, Pin.OUT, Pin.PULL_DOWN), 
-         Pin(M4_DOWN, Pin.OUT, Pin.PULL_DOWN)],
-]
+
+uart = UART(1, baudrate=115200, tx=UART_IO)
 
 led_power_io = Pin(LED1, Pin.OUT, Pin.PULL_DOWN)
 led_connect_io = Pin(LED2, Pin.OUT, Pin.PULL_DOWN)
+
+buffer_1 = Pin(BUFFER_1, Pin.IN, Pin.PULL_DOWN)
+buffer_2 = Pin(BUFFER_2, Pin.IN, Pin.PULL_DOWN)
+broken_detect = Pin(DETECT_IO, Pin.IN, Pin.PULL_DOWN)
+
+
+
+ch_io = [
+        [Pin(M1_UP, Pin.OUT, Pin.PULL_DOWN),
+         Pin(M1_DOWN, Pin.OUT, Pin.PULL_DOWN)],
+        [Pin(M2_UP, Pin.OUT, Pin.PULL_DOWN),
+         Pin(M2_DOWN, Pin.OUT, Pin.PULL_DOWN)],
+        [Pin(M3_UP, Pin.OUT, Pin.PULL_DOWN),
+         Pin(M3_DOWN, Pin.OUT, Pin.PULL_DOWN)],
+        [Pin(M4_UP, Pin.OUT, Pin.PULL_DOWN),
+         Pin(M4_DOWN, Pin.OUT, Pin.PULL_DOWN)],
+]
 
 cur_ch: int = 0
 cur_ch_action: int = ACTION.STOP
 
 latest_state = None
 
-buffer_1 = Pin(SW1, Pin.IN, Pin.PULL_DOWN)
-buffer_2 = Pin(SW2, Pin.IN, Pin.PULL_DOWN)
-broken_detect = Pin(SW3, Pin.IN, Pin.PULL_DOWN)
+# 定义去抖时间，单位为毫秒
+# DEBOUNCE_TIME_MS = 50
+
+# def buffer1_callback(pin):
+#     pass
+
+# def buffer2_callback(pin):
+#     pass
+
+# buffer1_callback.last_time = time.ticks_ms()
+# buffer2_callback.last_time = time.ticks_ms()
+
+# buffer_1.irq(trigger=Pin.IRQ_FALLING | Pin.IRQ_RISING, handler=buffer1_callback)
+# buffer_2.irq(trigger=Pin.IRQ_FALLING | Pin.IRQ_RISING, handler=buffer2_callback)
+
+def calculate_crc(data):
+    # CRC 校验函数
+    return binascii.crc32(data) & 0xFFFFFFFF
 
 
-def _motor_control(id: int, action: int):
-    if action == ACTION.PULL:
-        ch_io[id][0].value(1)
-        ch_io[id][1].value(0)
-    elif action == ACTION.PUSH:
-        ch_io[id][0].value(0)
-        ch_io[id][1].value(1)
-    elif action == ACTION.STOP:
-        ch_io[id][0].value(0)
-        ch_io[id][1].value(0)
+def uart_motor_control(ch: int, fx: int):
+    data = struct.pack('BBB', 0, ch, fx)
+    uart_msg(data)
 
 
-def _motor_set(id: int, action: int):
+def uart_motor_set(ch: int, fx: int):
+    data = struct.pack('BBB', 1, ch, fx)
+    uart_msg(data)
+
+
+def uart_msg(data):
+    length = len(data)
+    crc = calculate_crc(data)
+    # 数据包格式：长度(1字节) + 数据 + CRC(4字节)
+    packet = struct.pack('B', length) + data + struct.pack('I', crc)
+    uart.write(packet)
+
+
+def _motor_control(ch: int, action: int):
+    if ch < 4:
+        if action == ACTION.PULL:
+            ch_io[ch][0].value(1)
+            ch_io[ch][1].value(0)
+        elif action == ACTION.PUSH:
+            ch_io[ch][0].value(0)
+            ch_io[ch][1].value(1)
+        elif action == ACTION.STOP:
+            ch_io[ch][0].value(0)
+            ch_io[ch][1].value(0)
+    else:
+        uart_motor_control(ch-4, action)
+
+
+def _motor_set(ch: int, action: int):
     for i in range(4):
-        if i != id:
+        if i != ch:
             _motor_control(i, ACTION.STOP)
         else:
             _motor_control(i, action)
 
+    if ch < 4:
+        uart_motor_set(0, ACTION.STOP)
+    else:
+        uart_motor_set(ch-4, action)
 
-def motor_triiger(id: int, action: int):
+
+def motor_triiger(ch: int, action: int):
     global cur_ch
     global cur_ch_action
-    
-    if cur_ch == id and cur_ch_action == action:
+
+    if cur_ch == ch and cur_ch_action == action:
         return
-    
-    cur_ch = id
+
+    cur_ch = ch
     cur_ch_action = action
-    _motor_control(id, action)
+    _motor_control(ch, action)
 
 
 def gpio_init():
@@ -100,8 +157,10 @@ def self_check():
         _motor_control(i, ACTION.STOP)
         time.sleep(0.5)
 
+
 def get_broken_state():
     return broken_detect.value()
+
 
 def logic(onbrokenSwitch):
     global cur_ch
@@ -110,9 +169,9 @@ def logic(onbrokenSwitch):
 
     currentState = broken_detect.value()
     if currentState != latest_state:
-            latest_state = currentState
-            if onbrokenSwitch:
-                onbrokenSwitch(latest_state)
+        latest_state = currentState
+        if onbrokenSwitch:
+            onbrokenSwitch(latest_state)
 
     if cur_ch_action == ACTION.PUSH:
         if buffer_2.value() == 1:
@@ -134,13 +193,14 @@ def logic(onbrokenSwitch):
 
 
 if __name__ == '__main__':
-    gpio_init()
+    # gpio_init()
     # self_check()
-    motor_triiger(3, ACTION.PUSH)
+    # motor_triiger(3, ACTION.PUSH)
 
     try:
         while True:
-            logic()
-            time.sleep(0.05)
+            logic(None)
+            time.sleep(0.1)
+            uart_motor_control(0, 1)
     except KeyboardInterrupt:
         gpio_init()
