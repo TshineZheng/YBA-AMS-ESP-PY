@@ -4,6 +4,8 @@
 ## 固件
 [下载](https://github.com/TshineZheng/YBA-AMS-ESP-PY/releases)
 
+注意! 单缓冲固件有标注 **single_buffer** 字样，其他都是每个通道一个缓冲。
+
 ## 使用
 唯一的区别是配网, 微信小程序搜索 **一键配网**
 
