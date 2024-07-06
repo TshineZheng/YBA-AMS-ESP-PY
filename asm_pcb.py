@@ -2,6 +2,7 @@ import binascii
 import struct
 import time
 
+import utime
 from machine import UART, Pin
 
 # 串口编号设置
@@ -42,7 +43,6 @@ buffer_2 = Pin(BUFFER_2, Pin.IN, Pin.PULL_DOWN)
 broken_detect = Pin(DETECT_IO, Pin.IN, Pin.PULL_DOWN)
 
 
-
 ch_io = [
         [Pin(M1_UP, Pin.OUT, Pin.PULL_DOWN),
          Pin(M1_DOWN, Pin.OUT, Pin.PULL_DOWN)],
@@ -59,20 +59,6 @@ cur_ch_action: int = ACTION.STOP
 
 latest_state = None
 
-# 定义去抖时间，单位为毫秒
-# DEBOUNCE_TIME_MS = 50
-
-# def buffer1_callback(pin):
-#     pass
-
-# def buffer2_callback(pin):
-#     pass
-
-# buffer1_callback.last_time = time.ticks_ms()
-# buffer2_callback.last_time = time.ticks_ms()
-
-# buffer_1.irq(trigger=Pin.IRQ_FALLING | Pin.IRQ_RISING, handler=buffer1_callback)
-# buffer_2.irq(trigger=Pin.IRQ_FALLING | Pin.IRQ_RISING, handler=buffer2_callback)
 
 def calculate_crc(data):
     # CRC 校验函数
@@ -192,8 +178,24 @@ def logic(onbrokenSwitch):
             _motor_set(cur_ch, ACTION.STOP)
 
 
+def test_logic():
+    print('test logic start')
+    for ch in [1, 5, 0, 2, 3, 4, 6, 7]:
+        print(f"channel {ch} testing")
+        motor_triiger(ch, ACTION.STOP)
+        end_time = utime.ticks_ms() + 500
+        while utime.ticks_ms() < end_time:
+            logic(None)
+
+    global cur_ch
+    global cur_ch_action
+    motor_triiger(cur_ch, cur_ch_action)
+    print('test logic end')
+
+
 if __name__ == '__main__':
-    # gpio_init()
+    gpio_init()
+    test_logic()
     # self_check()
     # motor_triiger(3, ACTION.PUSH)
 

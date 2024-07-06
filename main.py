@@ -91,6 +91,7 @@ esp.osdebug(0)  # 禁用调试
 ams.gpio_init()
 ams.led_power_io.value(1)
 ams.led_connect_io.value(0)
+ams.test_logic()
 
 gc.enable()  # 启用垃圾回收
 print("已分配内存：", gc.mem_alloc())  # 查看当前已分配的内存
