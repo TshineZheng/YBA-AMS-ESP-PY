@@ -5,6 +5,8 @@ import time
 import utime
 from machine import UART, Pin
 
+from mpy_common.file_util import file_exists
+
 # 串口编号设置
 M1_UP = 0
 M1_DOWN = 1
@@ -59,6 +61,23 @@ cur_ch_action: int = ACTION.STOP
 
 latest_state = None
 
+CHANNEL_FILE = 'channel_latest'
+
+def update_latest_channel(channel: int):
+    with open(CHANNEL_FILE, 'w') as f:
+        f.write(str(channel))
+
+def get_latest_channel() -> int:
+    # 如果文件不存在，则返回 0
+    if not file_exists(CHANNEL_FILE):
+        return 0
+    
+    try:
+        with open(CHANNEL_FILE, 'r') as f:
+            return int(f.read())
+    except:
+        return 0
+
 
 def calculate_crc(data):
     # CRC 校验函数
@@ -97,7 +116,6 @@ def _motor_control(ch: int, action: int):
     else:
         uart_motor_control(ch-4, action)
 
-
 def _motor_set(ch: int, action: int):
     for i in range(4):
         if i != ch:
@@ -110,8 +128,7 @@ def _motor_set(ch: int, action: int):
     else:
         uart_motor_set(ch-4, action)
 
-
-def motor_triiger(ch: int, action: int):
+def motor_triiger(ch: int, action: int, test = False):
     global cur_ch
     global cur_ch_action
 
@@ -121,6 +138,11 @@ def motor_triiger(ch: int, action: int):
     cur_ch = ch
     cur_ch_action = action
     _motor_control(ch, action)
+
+    if test:
+        return
+
+    update_latest_channel(ch)
 
 
 def gpio_init():
@@ -179,17 +201,21 @@ def logic(onbrokenSwitch):
 
 
 def test_logic():
+    # save latest channel
+    latest_channel = get_latest_channel()
+    print('latest channel', latest_channel)
+
     print('test logic start')
     for ch in [1, 5, 0, 2, 3, 4, 6, 7]:
         print(f"channel {ch} testing")
-        motor_triiger(ch, ACTION.STOP)
+        motor_triiger(ch, ACTION.STOP, True)
         end_time = utime.ticks_ms() + 500
         while utime.ticks_ms() < end_time:
             logic(None)
 
-    global cur_ch
-    global cur_ch_action
-    motor_triiger(cur_ch, cur_ch_action)
+    # restore latest channel
+    motor_triiger(latest_channel, ACTION.STOP, True)
+
     print('test logic end')
 
 
